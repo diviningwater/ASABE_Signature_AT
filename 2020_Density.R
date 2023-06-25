@@ -1,0 +1,435 @@
+rm(list=ls(all=TRUE))
+library(dplyr)
+load("soil_moisture2.RData")
+for (s in 1: 10){
+  data <- soil_moisture[[s]]
+  data <- data[data[,2] >= 1,]
+  data <- na.omit(data)
+  data <- data[data$Date <= as.POSIXct("2020-09-05 23:59:59", 
+                                       format = "%Y-%m-%d %H:%M:%S"), ]
+  
+  soil_moisture[[s]] <- data
+}
+StnIds <- data.frame(
+  ID=c("01209A5A","01209A4A","01209C43",
+       "01209A50","01209C51","01209A63",
+       "0120A68D","0120A68F","0120A7A8","0120A67D"),
+  Name=c("Corn1","Corn2","Corn3","Cotton1",
+         "Cotton2","Cotton3","CornNon","CornFull","CottonNon","CottonFull") )
+
+ColorPalette <- colorRampPalette(c('red','orange','green','blue','purple'))
+plot.colors<-ColorPalette(5)
+
+plot <- par(mfrow=c(3,1))
+
+
+
+#Using function to plot the density plots
+sensor.plot <- function(s){
+  plot.title <- StnIds$Name[s]
+  mypath <- file.path("G:","Shared drives","Tidewater-HydSignatures",
+                      "Density_Images2020",paste("SM",plot.title,".png",sep=" "))
+  png(mypath,res=100)
+  layout(mat = matrix(c(1,2,3),
+                      nrow=3,
+                      ncol=1),
+         heights=c(0.05,0.045,0.06),      #heights of 3 rows #add title and label to know relative heights
+         widths=c(1.5,1.5,1.5))           #widths of 1 column
+  layout.show(3)
+  
+  myYlim1 <- max(c(density(soil_moisture[[s]][,2])$y,density(soil_moisture[[s]][,3])$y,density(soil_moisture[[s]][,4])$y))
+  myXlim1 <- range(c(soil_moisture[[s]][,2],soil_moisture[[s]][,3],soil_moisture[[s]][,4]))
+  par(mar = c(0,4,2,2))   #bottom,left,top,right margins
+  plot(density(soil_moisture[[s]][,2]),main = plot.title, xlim=myXlim1,ylim=c(0,myYlim1), xlab="",ylab="Density",col=plot.colors[1])
+  lines(density(soil_moisture[[s]][,3]), col=plot.colors[2])
+  lines(density(soil_moisture[[s]][,4]), col=plot.colors[3])
+  legend("topright",                                 
+         legend = c("SM_1", "SM_2", "SM_3"),
+         col = c("red", "orange", "green"),
+         lty = 1,cex=0.8)
+  #dev.off()   #this completes image creation. otherwise the image won't update and show
+  
+  #Plot2
+  myYlim2 <- max(c(density(soil_moisture[[s]][,5])$y,density(soil_moisture[[s]][,6])$y,density(soil_moisture[[s]][,7])$y))
+  myXlim2 <- range(c(soil_moisture[[s]][,5],soil_moisture[[s]][,6],soil_moisture[[s]][,7]))
+  par(mar = c(0,4,1,2))
+  plot(density(soil_moisture[[s]][,5]), main = "", xlim=myXlim2, ylim=c(0,myYlim2), xlab="",col=plot.colors[1])#main = "SM 4-5-6"
+  lines(density(soil_moisture[[s]][,6]), col=plot.colors[2])
+  lines(density(soil_moisture[[s]][,7]), col=plot.colors[3])
+  legend("topright",                                 
+         legend = c("SM_4", "SM_5", "SM_6"),
+         col = c("red", "orange", "green"),
+         lty = 1,cex=0.8)
+  
+  #dev.off()
+  #Plot3
+  myYlim3 <- max(c(density(soil_moisture[[s]][,8])$y,density(soil_moisture[[s]][,9])$y,density(soil_moisture[[s]][,10])$y))
+  myXlim3 <- range(c(soil_moisture[[s]][,8],soil_moisture[[s]][,9],soil_moisture[[s]][,10]))
+  par(mar = c(4,4,1,2))
+  plot(density(soil_moisture[[s]][,8]), main = "", xlim=myXlim3,ylim=c(0,myYlim3),
+       xlab="Soil moisture (%)",col=plot.colors[1]) #main = "SM 7-8-9"
+  lines(density(soil_moisture[[s]][,9]), col=plot.colors[2])
+  lines(density(soil_moisture[[s]][,10]), col=plot.colors[3])
+  legend("topright",                                 
+         legend = c("SM_7", "SM_8", "SM_9"),
+         col = c("red", "orange", "green"),
+         lty = 1,cex=0.8)
+  
+  #dev.off()  #just run this dev. do not run other dev.off to save the overall image
+}  
+for(s in 1:10){
+  #sensor.plot(s)
+}
+
+
+#Checking peaks and valleys without any thresholds
+SM_peaks <- function(s,D,thresh){
+  dat <- soil_moisture[[s]][,D]
+  d <- density(dat)
+  probe <- StnIds$Name[s]
+  dep <- as.character(D-1)
+  #plot.title <- paste(probe,"depth",dep,sep="_")
+  plot.title <- paste("")
+  plot(d, type = "l",main=plot.title,xlab="VWC (%)",cex.lab=1.35,cex.axis=1.35)
+  pks <- which(diff(sign(diff(d$y, na.pad = FALSE)), na.pad = FALSE)<0) +2 #ca                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              lculates peaks
+  pks1 <- which(diff(sign(diff(d$y, na.pad = FALSE)), na.pad = FALSE)>0) +2 #calculates valleys
+  a <<- pks[d$y[pks]>thresh*max(d$y[pks])] #thresholding based on height of max peak
+  #let's plot
+  points(d$x[a], d$y[a], col="red", pch=2,lwd=2)# to check peak
+  points(d$x[pks1], d$y[pks1], col="blue", pch=8, lwd=1.5) #to check valleys
+  #rm(d,x,y)
+}
+
+#calling function 
+SM_peaks(9,5,0)
+
+
+#Saving density plots with initial peaks into library
+for (S in 1:10){
+  for (depth in 2:10){
+    probe <- StnIds$Name[S]
+    D <- as.character(depth-1)
+    plot.title <- paste(probe,"depth",D,sep="_")
+    mypath <- file.path("G:","Shared drives","Tidewater-HydSignatures",
+                        "Plot_initialpeaks2020",paste(plot.title,".png",sep="_"))
+    png(mypath,res=100)
+    
+    #name <- paste(probe,"depth",D,sep="_")
+    plot <- SM_peaks(S, depth, 0)
+    #dev.off()
+  }
+} 
+
+#Creating empty dataframe to save peak and valley coordinates and threshold result
+Pktable <- data.frame(
+  X_peak=numeric(),
+  Y_peak=numeric(),
+  X_valley=numeric(),
+  Y_valley=numeric(),
+  PK_thres_Valley=numeric(),#saving values that are higher than nearest valley
+  PK_thres_PKmax=numeric()  #Saving values that are higher than some % of max peak
+)
+
+##Below we will try setting threshold
+#Main function
+SM_peaks <- function(S,depth,thresh1,thresh2){
+  dat <- soil_moisture[[S]][,depth]
+  d <- density(dat)
+  plot(d, type = "l")
+  pks <- which(diff(sign(diff(d$y, na.pad = FALSE)), na.pad = FALSE)<0) +2 
+  pks1 <- which(diff(sign(diff(d$y, na.pad = FALSE)), na.pad = FALSE)>0) +2
+  n.pks <- length(pks)
+  n.valley <- length(pks1)
+  
+  Pktable <- data.frame(  
+    X_peak=rep(NA, n.pks),
+    Y_peak= NA,
+    X_valley=NA,
+    Y_valley=NA,
+    PK_thres_Valley=NA,
+    PK_thres_PKmax=NA  
+  )
+  
+  valley_x <- d$x[pks1]
+  valley_y <- d$y[pks1]
+  Pktable$X_peak <- d$x[pks]
+  Pktable$Y_peak <- d$y[pks]
+  Pktable$Y_valley[length(pks)] <- d$y[length(d$x)] 
+  Pktable$X_valley[length(pks)] <- d$x[length(d$x)] 
+  
+  for (i in 1:(length(pks)-1)) {
+    #Let's save all peaks and valleys X and Y coordinates
+    Pktable$X_valley[i] <- valley_x[i]
+    Pktable$Y_valley[i] <- valley_y[i]
+    if (Pktable$Y_valley[i] < thresh1*Pktable$Y_peak[i]){
+      Pktable$PK_thres_Valley[i] <- Pktable$Y_peak[i]
+    } 
+    
+  }
+  if ((Pktable$Y_valley[length(pks)] < thresh1*Pktable$Y_peak[length(pks)])||
+      (Pktable$Y_valley[length(pks)-1] < thresh1*Pktable$Y_peak[length(pks)])){
+    Pktable$PK_thres_Valley[length(pks)] <- Pktable$Y_peak[length(pks)]
+  }
+  ###
+  for (i in 1:length(pks)){
+    if (!is.na(Pktable$PK_thres_Valley[i])){
+      if (Pktable$PK_thres_Valley[i]>thresh2*(max(Pktable$PK_thres_Valley, na.rm=TRUE))){
+        Pktable$PK_thres_PKmax[i] <- Pktable$PK_thres_Valley[i]
+      }
+    }
+    
+  }
+  
+  #### 
+  return(Pktable) 
+  #points(Pktable$X_peak, Pktable$PK_thres_PKmax, col="red", pch=2,lwd=2)
+  
+} # close function
+
+#Saving Peaks values dataframe into library
+par(mar=c(4,4,4,4))
+for (S in 1:10){
+  for (depth in 2:10){
+    probe <- StnIds$Name[S]
+    D <- as.character(depth-1)
+    #name <- paste(probe,"depth",D,sep="_")
+    data <- SM_peaks(S, depth, thresh1=0.75, thresh2=0.30)
+    mypath <- file.path("G:","Shared drives","Tidewater-HydSignatures",
+                        "Peaks_and_valleys2020",paste(probe,"depth",D,".csv",sep="_"))
+    write.csv(data,mypath)
+  }
+} 
+test <- SM_peaks(S=9, depth=7, thresh1=0.75, thresh2=0.30) #depth 2 to 10 #Probe(S=1 to 6)
+
+
+#create an empty dataframe to store number of peaks for all probes (9 sensors each)
+PK_number <- data.frame(
+  Depth=c("4-inch","8-inch","12-inch",
+          "16-inch","20-inch","24-inch",
+          "28-inch","32-inch","36-inch"),
+  Corn1=c(""),
+  Corn2=c(""),
+  Corn3=c(""),
+  Cotton1=c(""),
+  Cotton2=c(""),
+  Cotton3=c(""),
+  CornNon=c(""),
+  CornFull=c(""),
+  CottonNon=c(""),
+  CottonFull=c(""))
+
+
+for (S in 1:10){
+  for (depth in 2:10){
+    data <- SM_peaks(S, depth, thresh1=0.75, thresh2=0.30)
+    PK_number[depth-1,S+1] <- nrow(na.omit(data))
+    mypath <- file.path("G:","Shared drives","Tidewater-HydSignatures",
+                        "Peak_values2020",paste("PK_number.csv",sep=""))
+    write.csv(PK_number,mypath)
+  }
+}
+
+#Let's automate code to save values higher than mean as FC (plot with single peak)
+#If one peak and lower than 1, it will be PWP.
+#create an empty dataframe to store high peak values for all probes
+PK_highvalues <- data.frame(
+  Depth=c("4-inch","8-inch","12-inch",
+          "16-inch","20-inch","24-inch",
+          "28-inch","32-inch","36-inch"),
+  Corn1=c(""),
+  Corn2=c(""),
+  Corn3=c(""),
+  Cotton1=c(""),
+  Cotton2=c(""),
+  Cotton3=c(""),
+  CornNon=c(""),
+  CornFull=c(""),
+  CottonNon=c(""),
+  CottonFull=c(""))
+
+for (S in 1:10){
+  for (depth in 2:10){
+    data <- SM_peaks(S, depth, thresh1=0.75, thresh2=0.30)
+    data1 <- na.omit(data)
+    mean <- mean(soil_moisture[[S]][,depth])
+    if (nrow(data1)>1){
+      PK_highvalues[depth-1,S+1] <- tail(data1$X_peak,1)#high peaks
+      mypath <- file.path("G:","Shared drives","Tidewater-HydSignatures",
+                          "Peak_values2020",paste("PK_highvalues.csv",sep=""))
+      write.csv(PK_highvalues,mypath)
+    }
+    if (nrow(data1)==1){
+      if (tail(data1$X_peak,1)>mean){
+        PK_highvalues[depth-1,S+1] <- tail(data1$X_peak,1)
+        mypath <- file.path("G:","Shared drives","Tidewater-HydSignatures",
+                            "Peak_values2020",paste("PK_highvalues.csv",sep=""))
+        write.csv(PK_highvalues,mypath)
+      }
+
+    }
+  }
+}
+
+#create an empty dataframe to store low peak values for all probes
+PK_lowvalues <- data.frame(
+  Depth=c("4-inch","8-inch","12-inch",
+          "16-inch","20-inch","24-inch",
+          "28-inch","32-inch","36-inch"),
+  Corn1=c(""),
+  Corn2=c(""),
+  Corn3=c(""),
+  Cotton1=c(""),
+  Cotton2=c(""),
+  Cotton3=c(""),
+  CornNon=c(""),
+  CornFull=c(""),
+  CottonNon=c(""),
+  CottonFull=c(""))
+
+for (S in 1:10){
+  for (depth in 2:10){
+    data <- SM_peaks(S, depth, thresh1=0.75, thresh2=0.30)
+    data1 <- na.omit(data)
+    mean <- mean(soil_moisture[[S]][,depth])
+    if (nrow(data1)>1){
+      PK_lowvalues[depth-1,S+1] <- head(data1$X_peak,1)#low peaks
+      mypath <- file.path("G:","Shared drives","Tidewater-HydSignatures",
+                          "Peak_values2020",paste("PK_lowvalues.csv",sep=""))
+      write.csv(PK_lowvalues,mypath)
+    }
+    if (nrow(data1)==1){
+      if (tail(data1$X_peak,1)<mean){
+        PK_lowvalues[depth-1,S+1] <- tail(data1$X_peak,1)
+        mypath <- file.path("G:","Shared drives","Tidewater-HydSignatures",
+                            "Peak_values2020",paste("PK_lowvalues.csv",sep=""))
+        write.csv(PK_lowvalues,mypath)
+      }
+    }
+  }
+}
+
+
+
+
+#USing function to plot time series plots
+## Convert date columns to posix
+for (s in 1:length(soil_moisture)){  
+  soil_moisture[[s]][,1] <- as.POSIXct(soil_moisture[[s]][,1],
+                                       format="%Y-%m-%d %H:%M:%OS")
+}
+sensor.plot <- function(s){
+  plot.title <- paste(StnIds$Name[s])
+  
+  image.title <- StnIds$Name[s]
+  mypath <- file.path("G:","Shared drives","Tidewater-HydSignatures","SM_Images2020",
+                      "April2023",paste("SM",image.title,".png",sep=" "))
+  png(mypath,res=160) #only run this while saving, not viewing plots
+  
+  #png("Images/plot.png", res=100) #setting width and height gives error of large margins, changed margins for each of the 3 plots (might be an issue)
+  layout(mat = matrix(c(1,2,3),
+                      nrow=3,
+                      ncol=1),
+         heights=c(0.05,0.045,0.06),      #heights of 3 rows #add title and label to know relative heights
+         widths=c(1.5,1.5,1.5))           #widths of 1 column
+  layout.show(3)
+  
+  
+  myYlim1 <- range(c(soil_moisture[[s]][,2],soil_moisture[[s]][,3],soil_moisture[[s]][,4]))
+  myXlim <- range(c(soil_moisture[[s]][,1]))
+  par(mar = c(0,4,2,2))   #bottom,left,top,right margins
+  plot(soil_moisture[[s]][,1],soil_moisture[[s]][,2],type="l",xaxt="n",main = plot.title,ylim=myYlim1, xlim=myXlim,xlab="",ylab="VWC (%)",col=plot.colors[1])
+  lines(soil_moisture[[s]][,1],soil_moisture[[s]][,3], col=plot.colors[4])
+  lines(soil_moisture[[s]][,1],soil_moisture[[s]][,4], col=plot.colors[3])
+  legend("bottomright",                                 
+         legend = c("4 inches", "8 inches", "12 inches"),
+         col = c("red", "blue", "green"),
+         lty = 1,cex=0.5)
+  #box()
+  #dev.off()   #this completes image creation. otherwise the image won't update and show
+  
+  #Plot2
+  #png("SM_456.png")
+  
+  myYlim2 <- range(c(soil_moisture[[s]][,5],soil_moisture[[s]][,6],soil_moisture[[s]][,7]))
+  #myXlim2 <- as.character(range(c(soil_moisture[[s]][,1])))
+  par(mar = c(0,4,1,2))
+  plot(soil_moisture[[s]][,1],soil_moisture[[s]][,5], type="l",xaxt="n",main = "", ylim=myYlim2,xlim=myXlim, xlab="",ylab="VWC (%)",col=plot.colors[1])#main = "SM 4-5-6"
+  lines(soil_moisture[[s]][,1],soil_moisture[[s]][,6], col=plot.colors[4])
+  lines(soil_moisture[[s]][,1],soil_moisture[[s]][,7], col=plot.colors[3])
+  legend("bottomright",                                 
+         legend = c("16 inches", "20 inches", "24 inches"),
+         col = c("red", "blue", "green"),
+         lty = 1,cex=0.5)
+  #box()
+  #dev.off()
+  
+  #Plot3
+  #png("SM_789.png")
+  
+  myYlim3 <- range(c(soil_moisture[[s]][,8],soil_moisture[[s]][,9],soil_moisture[[s]][,10]))
+  #myXlim3 <- range(c(soil_moisture[[s]][,1]))
+  par(mar = c(4,4,1,2))
+  plot(soil_moisture[[s]][,1],soil_moisture[[s]][,8], type="l",main = "", ylim=myYlim3,xlim=myXlim, xlab=" ",ylab="VWC (%)",col=plot.colors[1]) #main = "SM 7-8-9"
+  lines(soil_moisture[[s]][,1],soil_moisture[[s]][,9], col=plot.colors[4])
+  lines(soil_moisture[[s]][,1],soil_moisture[[s]][,10], col=plot.colors[3])
+  legend("bottomright",                                 
+         legend = c("28 inches", "32 inches", "36 inches"),
+         col = c("red", "blue", "green"),
+         lty = 1,cex=0.5)
+  
+  dev.off()  #just run this dev. do not run other dev.off to save the overall image
+}  
+sensor.plot(1)
+for(s in 1:10){
+  sensor.plot(s)
+}
+
+#Final plot for timeseries in manuscript
+probes <- c(10,7,3)
+for (s in 1:length(soil_moisture)){  
+  soil_moisture[[s]][,1] <- as.POSIXct(soil_moisture[[s]][,1],
+                                       format="%Y-%m-%d %H:%M:%OS")
+}
+#plot.title <- paste(StnIds$Name[s])
+layout(mat = matrix(c(1,2,3),
+                    nrow=3,
+                    ncol=1),
+       heights=c(0.05,0.045,0.06),      #heights of 3 rows #add title and label to know relative heights
+       widths=c(1.5,1.5,1.5))           #widths of 1 column
+layout.show(3)
+
+
+myYlim1 <- range(c(soil_moisture[[10]][,2],soil_moisture[[10]][,3],soil_moisture[[10]][,4]))
+myXlim <- range(c(soil_moisture[[10]][,1]))
+par(mar = c(0,6,2,2))   #bottom,left,top,right margins
+plot(soil_moisture[[10]][,1],soil_moisture[[10]][,2],type="l",xaxt="n",
+     main = "",ylim=myYlim1, xlim=myXlim,xlab="",ylab="",col=plot.colors[1])
+lines(soil_moisture[[10]][,1],soil_moisture[[10]][,3], col=plot.colors[4])
+lines(soil_moisture[[10]][,1],soil_moisture[[10]][,4], col=plot.colors[3])
+#abline(h=27, lty=2,col="green")
+#abline(h=19.32, lty=2, col="blue")
+#abline(h=19.32, lty=2, col="red")
+
+myYlim2 <- range(c(soil_moisture[[7]][,2],soil_moisture[[7]][,3],soil_moisture[[7]][,4]))
+#myXlim2 <- as.character(range(c(soil_moisture[[s]][,1])))
+par(mar = c(0,6,1,2))
+plot(soil_moisture[[7]][,1],soil_moisture[[7]][,2], type="l",xaxt="n",
+     main = "", ylim=myYlim2,xlim=myXlim, xlab="",
+     ylab="Volumetric soil water content (%)",col=plot.colors[1])
+lines(soil_moisture[[7]][,1],soil_moisture[[7]][,3], col=plot.colors[4])
+lines(soil_moisture[[7]][,1],soil_moisture[[7]][,4], col=plot.colors[3])
+
+
+myYlim3 <- range(c(soil_moisture[[3]][,2],soil_moisture[[3]][,3],soil_moisture[[3]][,4]))
+#myXlim3 <- range(c(soil_moisture[[s]][,1]))
+par(mar = c(4,6,1,2))
+plot(soil_moisture[[3]][,1],soil_moisture[[3]][,2], type="l",main = "", 
+     ylim=myYlim3,xlim=myXlim, xlab=" ",ylab="",col=plot.colors[1])
+lines(soil_moisture[[3]][,1],soil_moisture[[3]][,3], col=plot.colors[4])
+lines(soil_moisture[[3]][,1],soil_moisture[[3]][,4], col=plot.colors[3])
+legend("bottomright",                                 
+       legend = c("10 cm", "20 cm", "30 cm"),
+       col = c("red", "blue", "green"),
+       lty = 1,cex=0.5,bty="n")
+
+#mtext("Volumetric soil water content (%)", side = 2, line = 2.5, outer=TRUE)
