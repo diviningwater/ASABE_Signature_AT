@@ -1,8 +1,5 @@
 ##
 ## HYdrologic Signatures - event based
-##  1. Read in soil moisture data    
-##  2. Functions to plot and smooth data
-##  3. Classify time series into Inf, nightly RW, ET, and GD
 
 library(smoother)
 library(lubridate)
@@ -15,7 +12,11 @@ library(zoo)
 
 rm(list=ls(all=TRUE))
 load("soil_moisture2.RData")
-
+Rain <- read.csv("Rainfall/hourly2020.csv")
+Rain <- Rain[,c(2,14)]
+Rain$Date <- mdy_h(Rain$hour)
+Rain <- Rain[,c(3,2)]
+Irrigation <- read.csv("Rainfall/Irrigation2020.csv")
 
 for (s in 1: 10){
   data <- soil_moisture[[s]]
@@ -141,6 +142,7 @@ apply(neg.tails, 1, mean) # high percentages - less heavy tailed
 
 # t is time interval for smoothing (e.g. t=4 leads to 4 hour moving average)
 # returns smoothed data frame (same format as soil_moisture) with all depths
+
 Main <- function(s,d,t){
   if (t>0){
     data <- data.smooth(s,t)
@@ -149,6 +151,65 @@ Main <- function(s,d,t){
   }
   class.data <- data.frame(Date=data$Date, Y=data[,(d+1)], dY=NA)
   
+  #Add irrigation events to full and precision dataframe
+  values_added <- FALSE
+  Rain$Type <- "Rainfall"
+  if (s %in% c(1, 2, 3) && !values_added) {
+    Rain[4456,2]<-Rain[4456,2]+25.4
+    Rain[4672,2]<-Rain[4672,2]+25.4
+    Rain[4744,2]<-Rain[4744,2]+0.0
+    Rain[4816,2]<-Rain[4816,2]+25.4
+    Rain[4912,2]<-Rain[4912,2]+0.0
+    Rain[4984,2]<-Rain[4984,2]+12.7
+    values_added <- TRUE
+   Rain$Type[4456]  <- "Irrigation"
+   Rain$Type[4672]  <- "Irrigation"
+   Rain$Type[4816]  <- "Irrigation"
+   Rain$Type[4984]  <- "Irrigation"
+  }
+  if (s %in% c(4, 5, 6) && !values_added) {
+    Rain[4456,2]<-Rain[4456,2]+25.4
+    Rain[4672,2]<-Rain[4672,2]+25.4
+    Rain[4744,2]<-Rain[4744,2]+0.0
+    Rain[4816,2]<-Rain[4816,2]+25.4
+    Rain[4912,2]<-Rain[4912,2]+0.0
+    Rain[4984,2]<-Rain[4984,2]+27.94
+    values_added <- TRUE
+    Rain$Type[4456]  <- "Irrigation"
+    Rain$Type[4672]  <- "Irrigation"
+    Rain$Type[4816]  <- "Irrigation"
+    Rain$Type[4984]  <- "Irrigation"
+  }
+  if (s==8 && !values_added) {
+    Rain[4456,2]<-Rain[4456,2]+25.4
+    Rain[4672,2]<-Rain[4672,2]+25.4
+    Rain[4744,2]<-Rain[4744,2]+25.4
+    Rain[4816,2]<-Rain[4816,2]+25.4
+    Rain[4912,2]<-Rain[4912,2]+25.4
+    Rain[4984,2]<-Rain[4984,2]+5.08
+    values_added <- TRUE
+    Rain$Type[4456]  <- "Irrigation"
+    Rain$Type[4672]  <- "Irrigation"
+    Rain$Type[4744]  <- "Irrigation"
+    Rain$Type[4816]  <- "Irrigation"
+    Rain$Type[4912]  <- "Irrigation"
+    Rain$Type[4984]  <- "Irrigation"
+  }
+  if (s==10 && !values_added) {
+    Rain[4456,2]<-Rain[4456,2]+25.4
+    Rain[4672,2]<-Rain[4672,2]+25.4
+    Rain[4744,2]<-Rain[4744,2]+25.4
+    Rain[4816,2]<-Rain[4816,2]+25.4
+    Rain[4912,2]<-Rain[4912,2]+25.4
+    Rain[4984,2]<-Rain[4984,2]+35.56
+    values_added <- TRUE
+    Rain$Type[4456]  <- "Irrigation"
+    Rain$Type[4672]  <- "Irrigation"
+    Rain$Type[4744]  <- "Irrigation"
+    Rain$Type[4816]  <- "Irrigation"
+    Rain$Type[4912]  <- "Irrigation"
+    Rain$Type[4984]  <- "Irrigation"
+  }
   ## Find first and second derivatives
   dY <- diff(class.data$Y)/diff(as.numeric(class.data$Date)/3600)# the derivative 
   class.data$dY = c(dY[1],dY)  #making X and dY of same length
@@ -297,6 +358,31 @@ Main <- function(s,d,t){
     }
   }  
   valid.data3 <- class.data[class.data$valid_trans3==1,]
+  
+  #Added October23rd.
+  # Create a new column in valid.data3 to store the results
+  if (nrow(valid.data3) > 0) {
+    valid.data3$NonZeroRainWithin3Days <- FALSE
+  
+  #Check if there was rainfall/irrigation at least 3 days before FC Date
+  # Loop through each row in valid.data3 and check for non-zero Rain_inc value within 3 days before the date
+    for (i in 1:nrow(valid.data3)) {
+      date_to_check <- valid.data3$Date[i]
+      previous_dates <- Rain$Date[Rain$Date <= date_to_check & Rain$Date >= (date_to_check - 3*24*60*60)]
+      for (j in 1:length(previous_dates)) {
+        if (any(Rain$Rain_inc[Rain$Date == previous_dates[j]] > 0)) {
+          valid.data3$NonZeroRainWithin3Days[i] <- TRUE
+          break
+        }
+      }
+   }
+  
+  # Filter valid.data3 based on the NonZeroRainWithin3Days column
+  valid.data3 <- valid.data3[valid.data3$NonZeroRainWithin3Days, ]
+  }else{
+    print("Valid.data3 has no rows")
+  }
+  
   FC <- mean(valid.data3$Y)
   FCmd <- median(valid.data3$Y)
   ## Possible characterizations of FC:
@@ -418,11 +504,41 @@ Main <- function(s,d,t){
   PWP.data <- PWP.data[PWP.data$Y < mean(class.data$Y),]  #less than average wc
   PWP.data <- PWP.data[PWP.data$Y < min(valid.data3$Y),]  #less than FC estimate
   PWP.data <- na.omit(PWP.data)
-  PWP <- mean(PWP.data$Y)
-  PWPmd <- median(PWP.data$Y)
+
   #indexes <- order(abs_diffs)[1:10]
   #print(indexes)
   #dates <- df$date[indexes]
+  
+  #Added October23rd.
+  #Check if there was rainfall/irrigation at least 5 days before PWP Date
+  # Loop through each row in PWP.data and check for zero Rain_inc value 
+  #within 5 days before the date
+   # Create a new column in PWP.data to store the results
+  #I will look for rainfall days only for top 5 sensors??& s%in% c(1,2,3,4,5)
+  if (nrow(PWP.data) > 0) {
+    PWP.data$ZeroRainWithin5Days <- FALSE
+ 
+    for (i in 1:nrow(PWP.data)) {
+      date_to_check <- PWP.data$Date[i] #check until 1 day before because it may take 1 day to arrive to deep sensors
+      previous_dates <- Rain$Date[Rain$Date <= date_to_check - 1*24*60*60 & 
+                                    Rain$Date >= (date_to_check - 5*24*60*60)]
+      all_zeros <- TRUE
+      for (j in 1:length(previous_dates)) {
+        if (any(Rain$Rain_inc[Rain$Date == previous_dates[j]] >1)) {
+          all_zeros <- FALSE
+          break
+        }
+      }
+      PWP.data$ZeroRainWithin5Days[i] <- all_zeros
+    }
+  # Filter valid.data3 based on the NonZeroRainWithin3Days column
+  PWP.data <- PWP.data[PWP.data$ZeroRainWithin5Days, ]
+  }else{
+    print("PWP.data has no rows")
+  }
+  
+  PWP <- mean(PWP.data$Y)
+  PWPmd <- median(PWP.data$Y)
   
   ## plot results
   #plot.title <- paste(StnIds$Name[s])
@@ -433,13 +549,46 @@ Main <- function(s,d,t){
     group_by(date_only) %>%
     slice(1)  # Select the first row for each day
   
+  #Let's add Rain data to class.data dataframe
+  # Load the dplyr library if not already loaded
+  if (!requireNamespace("dplyr", quietly = TRUE)) {
+    install.packages("dplyr")
+  }
+  library(dplyr)
+  
+  ###########################################added in OCt2023 for rain
+  # Convert the Date columns to the same format
+
+  rain.data <- left_join(class.data, Rain, by = "Date")
+  rain.data <- rain.data[,c(1,14,15)]
+  rain.data$Events <- NA
+  
+  
+  ###########################################added in OCt2023 for rain
+  y_lower_limit <- min(class.data$Y) * 0.8
+  y_upper_limit <- max(class.data$Y) * 1.1
+  rain.data$Rain_inc1 <-(rain.data$Rain_inc/2.5)+y_lower_limit
+  #To set secndary y axis maximum limit
+  rain_ymax <- (max(rain.data$Rain_inc1)-y_lower_limit)*2.5
+  #y_lower_lim <- 0
+  #y_upper_lim <- max(rain.data$Y) * 1.1
+
   if (nrow(valid.data3)>=1 && nrow(PWP.data)>=1){
-    p <- ggplot(class.data, aes(Date, Y,col=Events, group=1))+
+    p <- ggplot(class.data, aes(Date, Y, group=1))+
       xlab("Time (2020 Growing season)") + ylab(depth)+
-      geom_line(size=1)+
+      geom_line(aes(color=Events),size=1)+
       geom_point(data=valid.data3,aes(Date,Y),color='blue',size=1.5)+ 
       #one more line for PWP
-      geom_point(data=representative_points,aes(Date,Y),color='red',size=1.5)+ 
+      geom_point(data=representative_points,aes(Date,Y),color='red',size=1.5)+
+      #one more line for rainfall
+      geom_bar(data = rain.data, aes(Date, Rain_inc1, fill = Type), 
+               alpha = 0.5, stat = "identity", width = 20000) +
+      scale_fill_manual(values = c("Rainfall" = "cyan", "Irrigation" = "blue")) +
+      scale_y_continuous(expand=c(0,0), sec.axis = sec_axis(~(.-y_lower_limit)*2.5, 
+                                                            name = "Rain or Irrigation (mm/d)",
+                                                            breaks = seq(0, 60,by=15))
+      ) +
+      coord_cartesian(ylim = c(y_lower_limit, y_upper_limit)) +
       #valid.data2 above for viewing Inf-et transitions point
       #theme(plot.title = element_text(hjust = 0.5))+
       #ggtitle(plot.title) +
@@ -448,60 +597,82 @@ Main <- function(s,d,t){
         plot.background = element_blank(),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
-        legend.position = c(0.90, 0.13),
-        legend.title=element_text(size=12),
+       
+        legend.position = c(0.90, 0.33),
+        legend.title=element_text(size=10),
         axis.title.x = element_text(size =12),  # Adjust the x-axis label size
         axis.title.y = element_text(size =12),
         axis.text.x = element_text(size =12),  # Adjust the x-axis tick text size
         axis.text.y = element_text(size =12),  
-        legend.text=element_text(size=12))+
+        legend.text=element_text(size=10))+
       guides(col=guide_legend(ncol=2))+  #bcoz col in aesthetic, not fill
       scale_x_datetime(date_labels = "%b", breaks="1 month")
     # Format the x-axis labels to display only the month
     
     
   } else if (nrow(valid.data3) < 1 && nrow(PWP.data)>=1){
-    p <- ggplot(class.data, aes(Date, Y,col=Events, group=1))+
+    p <- ggplot(class.data, aes(Date, Y, group=1))+
       xlab("Time (2020 Growing season)") + ylab(depth)+
-      geom_line(size=1)+
+      geom_line(aes(color=Events),size=1)+
       geom_point(data=representative_points,aes(Date,Y),color='red',size=1.5)+ 
       #theme(plot.title = element_text(hjust = 0.5))+
+      #one more line for rainfall
+      geom_bar(data = rain.data, aes(Date, Rain_inc1, fill = Type), 
+               alpha = 0.5, stat = "identity", width = 20000) +
+      scale_fill_manual(values = c("Rainfall" = "cyan", "Irrigation" = "blue")) +
+      scale_y_continuous(expand=c(0,0), sec.axis = sec_axis(~(.-y_lower_limit)*2.5, 
+                                            name = "Rain or Irrigation (mm/d)",
+                            breaks = seq(0, 60,by=15))
+      ) +
+      coord_cartesian(ylim = c(y_lower_limit, y_upper_limit)) +
       #ggtitle(plot.title) +
       theme_bw()+
       theme(
         plot.background = element_blank(),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
-        legend.position = c(0.90, 0.13),
-        legend.title=element_text(size=12),
+        
+        #legend.position = "none",
+        legend.position = c(0.90, 0.43),
+        legend.title=element_text(size=10),
         axis.title.x = element_text(size =12),  # Adjust the x-axis label size
         axis.title.y = element_text(size =12),
         axis.text.x = element_text(size =12),  # Adjust the x-axis tick text size
         axis.text.y = element_text(size =12),  
-        legend.text=element_text(size=12))+
+        legend.text=element_text(size=10))+
       guides(col=guide_legend(ncol=2))+
       scale_x_datetime(date_labels = "%b", breaks="1 month")
     # Format the x-axis labels to display only the month
     
   } else if (nrow(valid.data3) >= 1 && nrow(PWP.data) < 1){
-    p <- ggplot(class.data, aes(Date, Y,col=Events, group=1))+
+    p <- ggplot(class.data, aes(Date, Y, group=1))+
       xlab("Time (2020 Growing season)") + ylab(depth)+
-      geom_line(size=1)+
+      geom_line(aes(color=Events),size=1)+
       geom_point(data=valid.data3,aes(Date,Y),color='blue',size=1.5)+ 
       #theme(plot.title = element_text(hjust = 0.5))+
+      #one more line for rainfall
+      geom_bar(data = rain.data, aes(Date, Rain_inc1, fill = Type), 
+               alpha = 0.5, stat = "identity", width = 20000) +
+      scale_fill_manual(values = c("Rainfall" = "cyan", "Irrigation" = "blue")) +
+      scale_y_continuous(expand=c(0,0), sec.axis = sec_axis(~(.-y_lower_limit)*2.5, 
+                                                            name = "Rain or Irrigation (mm/d)",
+                                                            breaks = seq(0, 75,by=15))
+      ) +
+      coord_cartesian(ylim = c(y_lower_limit, y_upper_limit)) +
       #ggtitle(plot.title) +
       theme_bw()+
       theme(
         plot.background = element_blank(),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
-        legend.position = c(0.90, 0.13),
-        legend.title=element_text(size=12),
+        #legend.position = "none",
+        legend.position = c(0.10, 0.63),
+        legend.title=element_text(size=10),
         axis.title.x = element_text(size =12),  # Adjust the x-axis label size
         axis.title.y = element_text(size =12),
         axis.text.x = element_text(size =12),  # Adjust the x-axis tick text size
         axis.text.y = element_text(size =12),  
-        legend.text=element_text(size=12))+
+        legend.text=element_text(size=10))+
       guides(col=guide_legend(ncol=2))+
       scale_x_datetime(date_labels = "%b", breaks="1 month")  
     # Format the x-axis labels to display only the month
@@ -509,43 +680,61 @@ Main <- function(s,d,t){
     # Format the x-axis labels to display only the month
     
   } else {
-    p <- ggplot(class.data, aes(Date, Y,col=Events, group=1))+
+    p <- ggplot(class.data, aes(Date, Y, group=1))+
       xlab("Time (2020 Growing season)") + ylab(depth)+
-      geom_line(size=1)+
+      geom_line(aes(color=Events),size=1)+
       #geom_point(data=PWP.data,aes(date,Y),color='red',size=1.5)+ 
       #theme(plot.title = element_text(hjust = 0.5))+
+      #one more line for rainfall
+      geom_bar(data = rain.data, aes(Date, Rain_inc1, fill = Type), 
+               alpha = 0.5, stat = "identity", width = 20000) +
+      scale_fill_manual(values = c("Rainfall" = "cyan", "Irrigation" = "blue")) +
+      scale_y_continuous(expand=c(0,0), sec.axis = sec_axis(~(.-y_lower_limit)*2.5, 
+                                                            name = "Rain or Irrigation (mm/d)",
+                                                            breaks = seq(0, 60,by=15))
+      ) +
+      coord_cartesian(ylim = c(y_lower_limit, y_upper_limit)) +
       #ggtitle(plot.title) +
       theme_bw()+
       theme(
         plot.background = element_blank(),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
-        legend.position = c(0.90, 0.13),
-        legend.title=element_text(size=12),
+        legend.position = c(0.90, 0.53),
+        legend.title=element_text(size=10),
         axis.title.x = element_text(size =12),  # Adjust the x-axis label size
         axis.title.y = element_text(size =12),
         axis.text.x = element_text(size =12),  # Adjust the x-axis tick text size
         axis.text.y = element_text(size =12),  
-        legend.text=element_text(size=12))+
+        legend.text=element_text(size=10))+
       guides(col=guide_legend(ncol=2))+
       scale_x_datetime(date_labels = "%b", breaks="1 month")
     # Format the x-axis labels to display only the month
     
   }
-  return(list(p,FC,PWP,FCmd, PWPmd,class.data,valid.data,valid.data2,valid.data3,PWP.data,representative_points))
+  return(list(p,FC,PWP,FCmd, PWPmd,class.data,valid.data,valid.data2,valid.data3,PWP.data,representative_points,rain.data))
   #valid.data2 with rf-et transition
   #valid.data3 with rf/RW-gd-et transition
 }
+
 
 #Main(s,d,t)
 # s = probe id (1 through 6)
 # d = sensor depth (1 through 9)
 # t is time interval for smoothing (e.g. t=4 leads to 4 hour moving average)
-dataframe<-Main(2,7,0) #For non-smoothed results t=0. better?
+dataframe<-Main(7,1,0) #For non-smoothed results t=0. better?
 
 #Main(1,1,0)
-Main(8,1,0)  #For smoothed results t>0
+Main(7,1,0)  #For smoothed results t>0
 
+
+#Oct09, trying to see what % of RW are classified during day and whats average diurnal fluctuation
+df<- dataframe[[6]]
+filtered_data <- df %>%
+  filter(class == "RW" & format(Date, "%H") >= "06" & format(Date, "%H") < "18")
+mean(filtered_data$dY)
+min(filtered_data$dY)
+max(filtered_data$dY)
 #Storing values
 #create an empty dataframe to store average FC values for all probes
 FCaverage <- data.frame(
@@ -567,7 +756,7 @@ for (S in 1:10){
   for (depth in 1:9){
     FCaverage[depth,S+1] <- Main(S,depth,0)[[2]]
     mypath <- file.path("G:","Shared drives","Tidewater-HydSignatures",
-                        "2020_soilsensordata","June2023",
+                        "2020_soilsensordata","October2023",
                         paste("FCaverage.csv",sep=""))
     write.csv(FCaverage,mypath)
   }
@@ -595,7 +784,7 @@ for (S in 1:10){
   for (depth in 1:9){
     PWPaverage[depth,S+1] <- Main(S,depth,0)[[3]]
     mypath <- file.path("G:","Shared drives","Tidewater-HydSignatures",
-                        "2020_soilsensordata","June2023",
+                        "2020_soilsensordata","October2023",
                         paste("PWPaverage.csv",sep=""))
     write.csv(PWPaverage,mypath)
   }
@@ -614,7 +803,7 @@ for (S in 1:10){
   for (depth in 1:9){
     image.title <- paste(StnIds$Name[S],DepthIds[depth],sep=",")
     mypath <- file.path("G:","Shared drives","Tidewater-HydSignatures",
-                        "2020_soilsensordata","June2023","Inflectionpts_June",
+                        "2020_soilsensordata","October2023","Inflectionpts_oct",
                         paste("SM",image.title,".png",sep=" "))
     png(mypath,width = width_pixels, height = height_pixels, res = 180)
     #only run this while saving, not viewing plots
@@ -650,4 +839,3 @@ for (S in 1:6){
   }
 }
 #quantile(Main(2,6,0)[[6]]$Y,c(0.25, 0.75))
-
